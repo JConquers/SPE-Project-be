@@ -16,7 +16,13 @@ def register_user(payload: UserCreate, db: Session = get_db()):
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    hashed = pwd_context.hash(payload.password)
+    # hashed = pwd_context.hash(payload.password)
+    raw_password = payload.password.strip()
+
+    if len(raw_password.encode("utf-8")) > 72:
+        raw_password = raw_password[:72]
+
+    hashed = pwd_context.hash(raw_password)
     user = User(email=payload.email, name=payload.name, password_hash=hashed)
     db.add(user)
     db.commit()

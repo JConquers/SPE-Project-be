@@ -10,50 +10,71 @@ from app.ml.health_score_model import compute_scores_from_features
 
 router = APIRouter()
 
-
 @router.post("/create", response_model=TwinRead)
 def create_twin(payload: TwinCreate, db: Session = get_db()):
     user = get_user_or_404(db, payload.user_id)
 
     twin = Twin(
         user_id=payload.user_id,
+        name=payload.name,
+
         age=payload.age,
         gender=payload.gender,
         height_cm=payload.height_cm,
         weight_kg=payload.weight_kg,
+
         systolic_bp=payload.systolic_bp,
         diastolic_bp=payload.diastolic_bp,
         fasting_sugar=payload.fasting_sugar,
         resting_hr=payload.resting_hr,
         spo2=payload.spo2,
         cholesterol=payload.cholesterol,
+
         sleep_hours=payload.sleep_hours,
         exercise_level=payload.exercise_level,
         stress_level=payload.stress_level,
         smoking=payload.smoking,
         alcohol=payload.alcohol,
         screen_time_hours=payload.screen_time_hours,
+
+        income=payload.income,
+        city=payload.city,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+
+        work_type=payload.work_type,
+        commute_hours=payload.commute_hours,
+        ac_exposure_hours=payload.ac_exposure_hours,
+
+        diet_type=payload.diet_type,
+        daily_steps=payload.daily_steps,
+        tea_coffee_per_day=payload.tea_coffee_per_day,
+        outside_food_per_week=payload.outside_food_per_week,
+
+        aqi=payload.aqi,
     )
 
-    # derive scores
+    # ✅ AUTO SCORE COMPUTATION
     bmi = payload.weight_kg / ((payload.height_cm / 100) ** 2)
-    scores = compute_scores_from_features(
-        {
-            "bmi": bmi,
-            "systolic_bp": payload.systolic_bp,
-            "fasting_sugar": payload.fasting_sugar,
-            "cholesterol": payload.cholesterol,
-            "sleep_hours": payload.sleep_hours,
-            "exercise_level": payload.exercise_level,
-            "stress_level": payload.stress_level,
-            "smoking": payload.smoking,
-            "alcohol": payload.alcohol,
-        }
-    )
+
+    scores = compute_scores_from_features({
+        "bmi": bmi,
+        "systolic_bp": payload.systolic_bp,
+        "fasting_sugar": payload.fasting_sugar,
+        "cholesterol": payload.cholesterol,
+        "sleep_hours": payload.sleep_hours,
+        "exercise_level": payload.exercise_level,
+        "stress_level": payload.stress_level,
+        "smoking": payload.smoking,
+        "alcohol": payload.alcohol,
+        "aqi": payload.aqi or 100,
+    })
+
     twin.heart_score = scores["heart_score"]
     twin.metabolic_score = scores["metabolic_score"]
     twin.mental_stress_score = scores["mental_stress_score"]
     twin.organ_load_score = scores["organ_load_score"]
+    twin.lung_risk_score = scores.get("lung_risk_score")
 
     db.add(twin)
     db.commit()

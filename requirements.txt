@@ -14,3 +14,4 @@ pydantic[email]
 mlflow
 scikit-learn
 joblib
+xgboost

@@ -8,7 +8,13 @@ import mlflow
 import mlflow.sklearn
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import (
+    RandomForestClassifier,
+    GradientBoostingClassifier,
+    ExtraTreesClassifier,
+    AdaBoostClassifier,
+)
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, f1_score
@@ -19,10 +25,15 @@ from joblib import dump, load
 from app.database.db import SessionLocal
 from app.database.twin_schema import Twin
 
+# ✅ Optional XGBoost
+try:
+    from xgboost import XGBClassifier
+    XGBOOST_AVAILABLE = True
+except:
+    XGBOOST_AVAILABLE = False
 
 MODELS_DIR = "models"
 META_PATH = os.path.join(MODELS_DIR, "models_meta.json")
-
 
 # =========================
 # FILE + META HELPERS
@@ -34,29 +45,22 @@ def _ensure_dirs():
         with open(META_PATH, "w") as f:
             json.dump({"models": []}, f)
 
-
 def _load_meta() -> Dict:
     _ensure_dirs()
     with open(META_PATH, "r") as f:
         return json.load(f)
 
-
 def _save_meta(meta: Dict):
     with open(META_PATH, "w") as f:
         json.dump(meta, f, indent=2)
 
-
 def get_registered_models() -> List[Dict]:
     return _load_meta().get("models", [])
-
 
 def get_active_model_path() -> Optional[str]:
     meta = _load_meta().get("models", [])
     active = [m for m in meta if m.get("active")]
-    if not active:
-        return None
-    return active[-1]["path"]
-
+    return active[-1]["path"] if active else None
 
 def get_active_model_info() -> Optional[Dict]:
     meta = _load_meta().get("models", [])
@@ -65,37 +69,27 @@ def get_active_model_info() -> Optional[Dict]:
             return m
     return None
 
-
 # =========================
 # FEATURE ENCODERS
 # =========================
 
 def _encode_gender(g):
-    if not g:
-        return 0
+    if not g: return 0
     g = g.lower()
-    if g.startswith("m"):
-        return 0
-    if g.startswith("f"):
-        return 1
+    if g.startswith("m"): return 0
+    if g.startswith("f"): return 1
     return 2
 
-
 def _encode_diet(d):
-    if not d:
-        return 3
+    if not d: return 3
     d = d.lower()
-    if "veg" in d and "non" not in d:
-        return 0
-    if "egg" in d:
-        return 1
-    if "non" in d:
-        return 2
+    if "veg" in d and "non" not in d: return 0
+    if "egg" in d: return 1
+    if "non" in d: return 2
     return 3
 
-
 # =========================
-# FEATURE VECTOR
+# FEATURE VECTOR ✅ FULL PRESERVED
 # =========================
 
 def _build_feature_vector(t: Twin) -> List[float]:
@@ -131,7 +125,6 @@ def _build_feature_vector(t: Twin) -> List[float]:
         t.organ_load_score or 0.4,
     ]
 
-
 def _build_label(t: Twin) -> int:
     ol = t.organ_load_score or 0.0
     if ol < 0.4:
@@ -143,9 +136,8 @@ def _build_label(t: Twin) -> int:
     else:
         return 3
 
-
 # =========================
-# LOAD DATA FROM DB
+# LOAD DATA FROM DB ✅ REAL DB
 # =========================
 
 def _load_training_data_from_db():
@@ -163,9 +155,8 @@ def _load_training_data_from_db():
 
     return np.array(X), np.array(y)
 
-
 # =========================
-# FULL MLOPS RETRAIN
+# FULL MLOPS RETRAIN ✅ 7 MODELS
 # =========================
 
 def retrain_alert_model() -> Dict:
@@ -179,10 +170,16 @@ def retrain_alert_model() -> Dict:
     mlflow.set_experiment("bodytwin_alert_models")
 
     models = {
-        "logreg": LogisticRegression(max_iter=2000, multi_class="multinomial"),
+        "logreg": LogisticRegression(max_iter=2000),
         "rf": RandomForestClassifier(n_estimators=200),
         "gb": GradientBoostingClassifier(),
+        "knn": KNeighborsClassifier(n_neighbors=5),
+        "extra_trees": ExtraTreesClassifier(n_estimators=200),
+        "adaboost": AdaBoostClassifier(),
     }
+
+    if XGBOOST_AVAILABLE:
+        models["xgboost"] = XGBClassifier(eval_metric="mlogloss")
 
     best_model_path = None
     best_f1 = -1
@@ -209,6 +206,7 @@ def retrain_alert_model() -> Dict:
 
             timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
             model_path = os.path.join(MODELS_DIR, f"alert_{key}_{timestamp}.joblib")
+
             dump(pipe, model_path)
             mlflow.sklearn.log_model(pipe, artifact_path=f"model_{key}")
 
@@ -245,9 +243,8 @@ def retrain_alert_model() -> Dict:
         "mlflow_run_id": best_run,
     }
 
-
 # =========================
-# PREDICTION USING ACTIVE MODEL
+# PREDICTION USING ACTIVE MODEL ✅
 # =========================
 
 def predict_alert_for_twin(twin: Twin) -> Dict:
