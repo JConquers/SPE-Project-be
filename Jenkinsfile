@@ -6,6 +6,7 @@ pipeline {
     REPO = "jinesh14/spe-project-be"
     DOCKER_IMAGE_TAG = ""
     IMAGE = ""
+    DOCKERHUB_CRED_ID="dockerhub"
   }
 
   stages {
