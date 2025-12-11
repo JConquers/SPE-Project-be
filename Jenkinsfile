@@ -42,13 +42,13 @@ pipeline {
       }
     }
 
-    stage('Deploy to K8s') {
-      steps {
-        sh """
-          kubectl -n dev set image deployment/backend backend=${IMAGE}
-        """
-      }
-    }
+    // stage('Deploy to K8s') {
+    //   steps {
+    //     sh """
+    //       kubectl -n dev set image deployment/backend backend=${IMAGE}
+    //     """
+    //   }
+    // }
   }
 
   post {
